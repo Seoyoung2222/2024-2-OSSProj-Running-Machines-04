@@ -1,10 +1,15 @@
+import { useSignin } from "@/hooks/useAuth";
 import { SigninValidation } from "@/utils/validation";
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 const SigninPage: React.FC = () => {
+  const navigate = useNavigate();
   const [email, setEmail] = useState<string>("");
   const [password, setPassword] = useState<string>("");
   const [valid, setValid] = useState(false);
+
+  const { mutate } = useSignin();
 
   const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setEmail(e.target.value);
@@ -16,8 +21,7 @@ const SigninPage: React.FC = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // 폼 제출 로직 추가
-    alert(`이메일: ${email}\n비밀번호: ${password}`);
+    mutate({ email, password });
   };
 
   useEffect(() => {
@@ -65,6 +69,12 @@ const SigninPage: React.FC = () => {
           required
         />
       </div>
+      <p
+        onClick={() => navigate("/signup")}
+        className="w-fit text-xs border-b border-gray-400 text-gray-400 cursor-pointer transition-all duration-200 hover:text-blue-600 hover:border-blue-600"
+      >
+        회원가입 바로가기
+      </p>
       <button
         type="submit"
         className={`fixed bottom-12 ${

@@ -1,32 +1,29 @@
 import { useEffect, useState } from "react";
 import { Map, MapMarker, Polyline } from "react-kakao-maps-sdk";
 import axios from "axios";
-import { api } from "@/apis";
-import { RouteResponse } from "@/types/routes";
 import { Route } from "@/types/kakaoMap";
+import useRunningCourseStore from "@/store/useRunningCourseStore";
+import useSelectedCourseStore from "@/store/useSelectedCourseStore";
 import useCourseStore from "@/store/useCourseStore";
+import useKakaomapStore from "@/store/useKakaomapStore";
+import useParsedCourseStore from "@/store/useParsedCourse";
 
 type KakaoMapProps = {
-  selectedCourse: RouteResponse;
   onClickCourse: (id: number) => void;
+  openSheet: boolean;
 };
 
-const KakaoMap = ({ selectedCourse, onClickCourse }: KakaoMapProps) => {
-  const { setCourse } = useCourseStore();
+const KakaoMap = ({ onClickCourse, openSheet }: KakaoMapProps) => {
+  const { setRunningCourse } = useRunningCourseStore();
+  const { selectedCourse } = useSelectedCourseStore();
+  const { course } = useCourseStore();
+  const { kakaomapState, setKakaomapState } = useKakaomapStore();
+  const { setParsedCourse } = useParsedCourseStore();
 
   // 현재 위치(마커) 상태
   const [current, setCurrent] = useState({
     lat: 37.51265,
     lng: 127.0919,
-  });
-
-  // 경로 정보 상태
-  const [state, setState] = useState({
-    center: { lat: 37.51265, lng: 127.0919 }, // 기본 위치 (잠실)
-    // center: { lat: 37.5665, lng: 126.978 }, // 기본 위치 (서울 시청)
-    errMsg: null as string | null,
-    isLoading: true,
-    routes: [] as Route[], // GPX 경로 데이터를 저장
   });
 
   useEffect(() => {
@@ -37,49 +34,41 @@ const KakaoMap = ({ selectedCourse, onClickCourse }: KakaoMapProps) => {
           (position) => {
             // 현재 위치 설정
             setCurrent({
-              lat: 37.51265,
-              lng: 127.0919,
-              // lat: position.coords.latitude,
-              // lng: position.coords.longitude,
+              lat: position.coords.latitude,
+              lng: position.coords.longitude,
             });
-            // 요청 경로 정보 설정
-            setState((prev) => ({
-              ...prev,
+            setKakaomapState({
+              ...useKakaomapStore.getState().kakaomapState, // 현재 상태 가져오기
               center: {
-                lat: 37.51265,
-                lng: 127.0919,
-                // lat: position.coords.latitude,
-                // lng: position.coords.longitude,
+                lat: position.coords.latitude,
+                lng: position.coords.longitude,
               },
-            }));
-            fetchGpxData(position.coords.latitude, position.coords.longitude);
+            });
+
+            fetchGpxData();
           },
           (err) => {
-            setState((prev) => ({
-              ...prev,
+            setKakaomapState({
+              ...useKakaomapStore.getState().kakaomapState, // 현재 상태 가져오기
               errMsg: err.message,
               isLoading: false,
-            }));
+            });
           }
         );
       } else {
-        setState((prev) => ({
-          ...prev,
+        setKakaomapState({
+          ...useKakaomapStore.getState().kakaomapState, // 현재 상태 가져오기
           errMsg: "geolocation을 사용할 수 없어요.",
           isLoading: false,
-        }));
+        });
       }
     };
 
-    // 서버에서 GPX 데이터를 가져오는 함수
-    const fetchGpxData = async (lat: number, lon: number) => {
+    // 서버 데이터의 GPX 데이터를 파싱하는 함수
+    const fetchGpxData = async () => {
       try {
-        const response = await api.get<RouteResponse[]>(
-          `/course/recommend?lat=${lat}&lon=${lon}`
-        );
-        const gpxFiles = response.data; // GPX 파일 목록
-
-        // const gpxFiles = dummyRouteData;
+        const gpxFiles = course; // 서버로부터 받은 GPX 파일 목록
+        console.log("gpxFiles", gpxFiles);
 
         const parsedRoutes: Route[] = await Promise.all(
           gpxFiles.map(async (course) => {
@@ -114,45 +103,46 @@ const KakaoMap = ({ selectedCourse, onClickCourse }: KakaoMapProps) => {
         );
 
         // 성공시
-        setState((prev) => ({
-          ...prev,
+        setParsedCourse(parsedRoutes);
+        setKakaomapState({
+          ...useKakaomapStore.getState().kakaomapState,
           routes: parsedRoutes,
           isLoading: false,
-        }));
+        });
       } catch (err) {
+        console.log("실패");
         // 실패시
-        setState((prev) => ({
-          ...prev,
+        setKakaomapState({
+          ...useKakaomapStore.getState().kakaomapState,
           errMsg: "GPX 데이터를 가져오는 중 오류가 발생했습니다.",
           isLoading: false,
-        }));
+        });
       }
     };
 
     getCurrentLocation();
-  }, [state.isLoading]);
+    console.log("마지막 state", kakaomapState);
+  }, [kakaomapState.isLoading, course]);
 
   const handlePolylineClick = (route: Route) => {
-    // 폴리라인 중심좌표 이동
-    // const centerLat =
-    //   route.path.reduce((sum, point) => sum + point.lat, 0) / route.path.length;
-    // const centerLng =
-    //   route.path.reduce((sum, point) => sum + point.lng, 0) / route.path.length;
-
-    setState((prev) => ({
-      ...prev,
+    setKakaomapState({
+      ...useKakaomapStore.getState().kakaomapState,
       // 폴리라인 시작좌표 이동
       center: { lat: route.path[0].lat, lng: route.path[0].lng },
-    }));
+    });
 
     // 선택한 폴리라인 값 업데이트
     onClickCourse(route.id);
-    setCourse(route.path);
+    console.log("선택한 코스: ", route);
+    console.log("selected state: ", selectedCourse);
+    console.log("state: ", kakaomapState);
+
+    setRunningCourse(route.path);
   };
 
   return (
     <Map
-      center={state.center}
+      center={kakaomapState.center}
       style={{
         position: "fixed",
         top: "0",
@@ -160,16 +150,18 @@ const KakaoMap = ({ selectedCourse, onClickCourse }: KakaoMapProps) => {
         width: "100%",
         height: "100vh",
       }}
-      level={selectedCourse.courseId !== 0 ? 4 : 7}
+      level={openSheet ? 7 : 4}
     >
-      {state.routes.map((route) => (
+      {kakaomapState.routes.map((route) => (
         <>
           <Polyline
             key={route.id}
             path={route.path}
             strokeWeight={6}
             strokeColor={
-              route.id === selectedCourse.courseId ? "#E21919" : "#15258E"
+              selectedCourse && route.id == selectedCourse.courseId
+                ? "#E21919"
+                : "#15258E"
             } // 선택된 폴리라인 강조
             strokeOpacity={0.7}
             strokeStyle="solid"
@@ -178,8 +170,36 @@ const KakaoMap = ({ selectedCourse, onClickCourse }: KakaoMapProps) => {
           />
         </>
       ))}
-      {state.errMsg && <div style={{ color: "red" }}>{state.errMsg}</div>}
-      {!state.isLoading && <MapMarker position={current}></MapMarker>}
+      {/* 편의점 좌표 */}
+      {course.map((location) =>
+        location.storeLocation.map((store, index) => (
+          <MapMarker
+            key={index}
+            position={{ lat: store.lat, lng: store.lon }}
+            image={{
+              src: "store.png",
+              size: { width: 24, height: 24 },
+            }}
+          />
+        ))
+      )}
+      {/* 화장실 좌표 */}
+      {course.map((location) =>
+        location.toiletLocation.map((toilet, index) => (
+          <MapMarker
+            key={index}
+            position={{ lat: toilet.lat, lng: toilet.lon }}
+            image={{
+              src: "toilet.png",
+              size: { width: 24, height: 24 },
+            }}
+          />
+        ))
+      )}
+      {kakaomapState.errMsg && (
+        <div style={{ color: "red" }}>{kakaomapState.errMsg}</div>
+      )}
+      {!kakaomapState.isLoading && <MapMarker position={current}></MapMarker>}
     </Map>
   );
 };

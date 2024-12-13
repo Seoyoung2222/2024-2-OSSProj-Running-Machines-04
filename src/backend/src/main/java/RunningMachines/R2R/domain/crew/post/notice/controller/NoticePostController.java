@@ -27,8 +27,8 @@ public class NoticePostController {
     @PostMapping
     public ResponseEntity<Long> createNoticePost(@PathVariable Long crewId, @RequestBody NoticePostCreateRequestDto requestDto) {
         User currentUser = authCommandService.getCurrentUser();
-        noticePostCommandService.createNoticePost(crewId, currentUser, requestDto);
-        return ResponseEntity.ok(crewId);
+        Long crewPostId = noticePostCommandService.createNoticePost(crewId, currentUser, requestDto);
+        return ResponseEntity.ok(crewPostId);
     }
 
     @GetMapping("/{crewPostId}")
@@ -39,5 +39,13 @@ public class NoticePostController {
     @GetMapping
     public ResponseEntity<CrewMainNoticeResponseDto> getNoticePostsByCrew(@PathVariable Long crewId) {
         return ResponseEntity.ok(noticePostQueryService.getNoticePostsByCrew(crewId));
+    }
+
+    @GetMapping("/redirectToChat")
+    public ResponseEntity<Void> redirectToChat(@PathVariable Long crewId) {
+        String chatUrl = "/crew/" + crewId + "/chat";
+        return ResponseEntity.status(303) // Redirect 상태 코드
+                .header("Location", chatUrl)
+                .build();
     }
 }

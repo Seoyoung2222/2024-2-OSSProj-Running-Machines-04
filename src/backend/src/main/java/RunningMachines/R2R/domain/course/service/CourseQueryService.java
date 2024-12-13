@@ -13,6 +13,7 @@ import RunningMachines.R2R.global.exception.CustomException;
 import RunningMachines.R2R.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
@@ -111,8 +112,48 @@ public class CourseQueryService {
         // 리뷰 태그가 없으면 파일명 파싱해 코스 태그 생성
         String name = fileName.substring(0, fileName.lastIndexOf('.')); // 확장자 제거
         String[] tags = name.split("_"); // 파일명을 '_'로 구분하여 태그 리스트 생성
-        tags = Arrays.copyOfRange(tags, 1, tags.length - 1); // 첫,마지막 번째 태그를 제외한 배열 생성 (파일명 인덱스 및 거리값 제거)
-        return List.of(tags);
+
+        String tag1 = tags[1]; // 난이도
+        switch (tag1) {
+            case "Beginner":
+                tag1 = "초보자";
+                break;
+            case "Advanced":
+                tag1 = "중급자";
+                break;
+            case "Expert":
+                tag1 = "상급자";
+                break;
+        }
+
+        String tag2 = tags[2] + "_" + tags[3]; // 편의시설
+        switch (tag2) {
+            case "No_Facilities":
+                tag2 = "";
+                break;
+            case "Essential_Facilities":
+                tag2 = "편의시설";
+                break;
+            case "Enhanced_Facilities":
+                tag2 = "편의시설";
+                break;
+        }
+
+        String tag3 = tags[4]; // 트랙 여부
+        switch (tag3) {
+            case "Track":
+                tag3 = "트랙경로";
+                break;
+            case "NonTrack":
+                tag3 = "일반경로";
+                break;
+        }
+
+        if (tag2.isEmpty()) {
+            return List.of(tag1, tag3);
+        } else{
+            return List.of(tag1, tag2, tag3);
+        }
     }
 
     // 즐겨찾기 코스 조회
@@ -129,5 +170,25 @@ public class CourseQueryService {
         return courseRepository.findAll().stream()
                 .map(Course::getCourseUrl)
                 .collect(Collectors.toList());
+    }
+
+    // 인기 코스 조회 (10개 제한)
+    public List<CourseResponseDto> getPopularCourses(String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+
+        List<Course> courses = courseRepository.findTop10ByUserCourseCount(PageRequest.of(0, 10));
+
+        List<CourseResponseDto> courseResponseDtos = new ArrayList<>();
+
+        for (Course course : courses) {
+            List<String> tags = createTags(course, course.getFileName());
+            boolean coursedLike = courseLikeRepository.existsByCourseAndUser(course, user);
+
+            CourseResponseDto courseResponseDto = CourseResponseDto.of(course, tags, coursedLike);
+            courseResponseDtos.add(courseResponseDto);
+        }
+
+        return courseResponseDtos;
     }
 }
